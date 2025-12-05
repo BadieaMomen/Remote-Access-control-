@@ -3,7 +3,7 @@ REMOTE CONTROL SIMULATION TOOL README
 Introduction
 This project is a Python-based simulation of a remote control and remote command execution tool. It includes a server control panel and a client agent program. The tool is designed for cybersecurity learning and demonstrates how devices communicate over networks using sockets.
 
-[]
+[GUI.png]
 
 Overview
 The system has two main components:
@@ -68,8 +68,8 @@ cd Desktop
 ipconfig
 
 PowerShell Tag Image
-Place PowerShell screenshot here:
-[POWERSHELL_IMAGE_HERE]
+
+[powerShell.png]
 
 Media Commands
 cmd_live_stream, cmd_record_audio, cmd_screenshot
