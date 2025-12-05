@@ -25,28 +25,21 @@ def timestamp():
 
 def append_log_to_file(line):
     """Append a log line to disk file for offline inspection."""
-    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-   
     with open(LOG_FILENAME, "a", encoding="utf-8") as f:
         f.write(line + "\n")
 
 class NetSimulatorApp:
     def __init__(self, root):
-        # Keep root handle
-        self.root = root
 
-        # Connection socket (None when not connected)
+        self.root = root
         self.sock = None
-        # Flag to indicate connected state
         self.connected = False
 
-        # Window config
         self.root.title("Remote Control ")
         self.root.geometry("920x560")
         self.root.columnconfigure(1, weight=1)
         self.root.rowconfigure(0, weight=1)
 
-        # Basic styling for dark look using ttk.Style
         style = ttk.Style(root)
         try:
             style.theme_use("clam")
@@ -118,11 +111,11 @@ class NetSimulatorApp:
         ttk.Label(status_frame, textvariable=self.status_var).grid(row=0, column=0, sticky="w")
 
         self.on_connect()
-    # ---------- Logging helpers ----------
+
     def log(self, text):
         """Append a line to the GUI log and persistent file."""
         line = f"[{timestamp()}] {text}"
-        # add to GUI
+
         self.root.after(0, self._insert_log, line + "\n")
         # append to file
         append_log_to_file(line)
@@ -143,7 +136,7 @@ class NetSimulatorApp:
             return
         host = self.host_var.get()
         port = int(self.port_var.get())
-        # Create socket and connect in background to avoid freezing UI
+        
         threading.Thread(target=self._connect_thread, args=(host, port), daemon=True).start()
 
     def _connect_thread(self, host, port):
