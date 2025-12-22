@@ -1,0 +1,8 @@
+[20251222_192204] connection with  127.0.0.1:59028
+[20251222_192217] Sent command: encrypt
+[20251222_192217] Response for message: status=ok
+[20251222_192217] Response for key: status=None
+[20251222_192217] Encryption Key (base64): BuYYR+IsTqVqqYOssDl8gPtE+E/ihV1wWHnO2PwH+Pg=
+[20251222_192217] Response for encryption: status=ok
+[20251222_192217] encryption Output:
+the .\2.png encrypted with key to .\2.png.enc
