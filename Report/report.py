@@ -1,6 +1,6 @@
 # import time ,datetime
 import os,sys
-LOG_FILENAME = "../logfile.log"
+LOG_FILENAME = "logfile.log"
 RECV_IMAGE = ".png"
 RECV_AUDIO = ".wav"
 
